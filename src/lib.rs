@@ -2,12 +2,26 @@ use lucius_curves::{Curve, KeyPair, PublicKey};
 
 mod edwards25519;
 
-pub type VfrHash = [u8; 32];
+pub struct VrfVerificationError;
+
+pub struct VrfSerializationError;
 
 pub trait VrfProof: Sized {
     type Curve: Curve;
+    type Hash;
+    type BytesType;
 
-    fn generate(key_pair: &KeyPair<Self::Curve>, data: impl AsRef<[u8]>) -> (Self, VfrHash);
+    fn generate(
+        key_pair: &KeyPair<Self::Curve>,
+        alpha_string: impl AsRef<[u8]>,
+    ) -> (Self, Self::Hash);
 
-    fn verify(&self, public_key: &PublicKey<Self::Curve>) -> Result<VfrHash, ()>;
+    fn verify(
+        &self,
+        public_key: &PublicKey<Self::Curve>,
+    ) -> Result<Self::Hash, VrfVerificationError>;
+
+    fn to_bytes(&self) -> Self::BytesType;
+
+    fn from_bytes(data: impl AsRef<[u8]>) -> Result<Self, VrfSerializationError>;
 }
