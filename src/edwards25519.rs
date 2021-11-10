@@ -3,8 +3,9 @@
 
 use lucius_curves::{
     edwards25519::{Edwards25519, KeyPair, PublicKey, SecretKey},
-    Curve,
+    Curve, Point,
 };
+use sha2::{Digest, Sha512};
 
 use crate::{VrfSerializationError, VrfVerificationError};
 
@@ -16,7 +17,7 @@ pub struct VrfProof {
 
 impl crate::VrfProof for VrfProof {
     type Curve = Edwards25519;
-    type Hash = ();
+    type Hash = [u8; 64];
     type BytesType = ();
 
     fn generate(key_pair: &KeyPair, alpha_string: impl AsRef<[u8]>) -> (Self, Self::Hash) {
@@ -51,11 +52,19 @@ impl crate::VrfProof for VrfProof {
 
 impl VrfProof {
     fn proof_to_hash(&self) -> <Self as crate::VrfProof>::Hash {
-        // 4. three_string = 0x03 = int_to_string(3, 1), a single octet with value 3
-        // 5. zero_string = 0x00 = int_to_string(0, 1), a single octet with value 0
         // 6. beta_string = Hash(suite_string || three_string || point_to_string(cofactor * Gamma) || zero_string)
+        let beta_string: [u8; 64] = Sha512::new()
+            .chain(&[0x03]) // Suite string for EDWARDS25519-SHA512-TAI
+            .chain(&[0x03])
+            .chain((<Edwards25519 as Curve>::Scalar::from(8u8) * self.gamma).to_bytes())
+            .chain(&[0x00])
+            .finalize()
+            .as_slice()
+            .try_into()
+            .unwrap();
+
         // 7. Output beta_string
-        todo!()
+        beta_string
     }
 
     fn hash_to_curve_try_and_increment(
@@ -82,9 +91,24 @@ impl VrfProof {
         h_string: impl AsRef<[u8]>,
     ) -> <Edwards25519 as Curve>::Scalar {
         // 1. hashed_sk_string = Hash(SK)
+        let hashed_sk_string: [u8; 64] = Sha512::digest(&secret_key.to_bytes())
+            .as_slice()
+            .try_into()
+            .unwrap();
+
         // 2. truncated_hashed_sk_string = hashed_sk_string[32]...hashed_sk_string[63]
+        let truncated_hashed_sk_string = &hashed_sk_string[32..64];
+
         // 3. k_string = Hash(truncated_hashed_sk_string || h_string)
+        let k_string: [u8; 64] = Sha512::new()
+            .chain(truncated_hashed_sk_string)
+            .chain(h_string)
+            .finalize()
+            .as_slice()
+            .try_into()
+            .unwrap();
+
         // 4. k = string_to_int(k_string) mod q
-        todo!()
+        <Edwards25519 as Curve>::Scalar::from_bytes_mod_order_wide(&k_string)
     }
 }
