@@ -67,6 +67,20 @@ impl VrfProof {
         beta_string
     }
 
+    fn hash_points(
+        points: impl AsRef<[<Edwards25519 as Curve>::Point]>,
+    ) -> <Edwards25519 as Curve>::Scalar {
+        // 1. two_string = 0x02 = int_to_string(2, 1), a single octet with value 2
+        // 2. Initialize str = suite_string || two_string
+        // 3. for PJ in [P1, P2, ... PM]:str = str || point_to_string(PJ)
+        // 4. zero_string = 0x00 = int_to_string(0, 1), a single octet with value 0
+        // 5. str = str || zero_string
+        // 6. c_string = Hash(str)
+        // 7. truncated_c_string = c_string[0]...c_string[n-1]
+        // 8. c = string_to_int(truncated_c_string)
+        // 9. Output c
+        todo!()
+    }
 
     fn hash_to_curve(
         y: &PublicKey,
