@@ -1,7 +1,9 @@
 mod edwards25519;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfVerificationError;
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfSerializationError;
 
 pub trait VrfSecretKey: Sized {

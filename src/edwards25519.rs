@@ -257,10 +257,27 @@ impl VrfProof {
 #[cfg(test)]
 //#[cfg(feature = "none")]
 mod tests {
-    use crate::VrfProof;
-
     use super::*;
+    use crate::VrfProof;
+    use assert_matches::assert_matches;
     use hex_literal::hex;
+
+    fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], betha: &[u8; 64]) {
+        let sk1 = SecretKey::from_bytes(&sk).unwrap();
+        let pk1 = PublicKey::from(&sk1);
+
+        // Check that key generation works
+        assert_eq!(&pk1.to_bytes(), &pk);
+
+        // Generate proof
+        let (proof, gen_hash) = super::VrfProof::generate(&pk1, &sk1, &alpha);
+
+        // Check that hash of proof works
+        assert_eq!(&gen_hash, betha);
+
+        // Check that verification passes and generates same test
+        assert_matches!(proof.verify(&pk1, &alpha), Ok(betha));
+    }
 
     #[test]
     fn test_case1() {
@@ -273,14 +290,34 @@ mod tests {
             "90cf1df3b703cce59e2a35b925d411164068269d7b2d29f3301c03dd757876
             ff66b71dda49d2de59d03450451af026798e8f81cd2e333de5cdf4f3e140fdd8ae"
         );
+        run_test_case(&SK, &PK, &ALPHA, &BETHA);
+    }
 
-        let sk = SecretKey::from_bytes(&SK).unwrap();
-        let pk = PublicKey::from(&sk);
+    #[test]
+    fn test_case2() {
+        const SK: [u8; 32] =
+            hex!("4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb");
+        const PK: [u8; 32] =
+            hex!("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c");
+        const ALPHA: [u8; 1] = hex!("72");
+        const BETHA: [u8; 64] = hex!(
+            "eb4440665d3891d668e7e0fcaf587f1b4bd7fbfe99d0eb2211ccec90496310
+            eb5e33821bc613efb94db5e5b54c70a848a0bef4553a41befc57663b56373a5031"
+        );
+        run_test_case(&SK, &PK, &ALPHA, &BETHA);
+    }
 
-        assert_eq!(&pk.to_bytes(), &PK);
-
-        let (proof, gen_hash) = super::VrfProof::generate(&pk, &sk, &ALPHA);
-        assert!(proof.verify(&pk, &ALPHA).is_ok());
-        assert_eq!(&gen_hash, &BETHA);
+    #[test]
+    fn test_case3() {
+        const SK: [u8; 32] =
+            hex!("c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7");
+        const PK: [u8; 32] =
+            hex!("fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025");
+        const ALPHA: [u8; 2] = hex!("af82");
+        const BETHA: [u8; 64] = hex!(
+            "645427e5d00c62a23fb703732fa5d892940935942101e456ecca7bb217c61c
+            452118fec1219202a0edcf038bb6373241578be7217ba85a2687f7a0310b2df19f"
+        );
+        run_test_case(&SK, &PK, &ALPHA, &BETHA);
     }
 }
