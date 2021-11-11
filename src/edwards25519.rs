@@ -41,11 +41,28 @@ impl VrfPublicKey for PublicKey {
     const LENGTH: usize = 32;
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self> {
-        todo!()
+        Some(Self(
+            CompressedEdwardsY::from_slice(data.as_ref()).decompress()?,
+        ))
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        todo!()
+        self.0.compress().to_bytes().to_vec()
+    }
+}
+
+impl From<&SecretKey> for PublicKey {
+    fn from(secret_key: &SecretKey) -> Self {
+        let hash: [u8; 64] = Sha512::digest(&secret_key.0).as_slice().try_into().unwrap();
+
+        let mut bits: [u8; 32] = [0u8; 32];
+        bits.copy_from_slice(&hash[0..32]);
+
+        bits[0] &= 248;
+        bits[31] &= 127;
+        bits[31] |= 64;
+
+        PublicKey(Scalar::from_bits(bits) * ED25519_BASEPOINT_POINT)
     }
 }
 
@@ -229,7 +246,7 @@ impl VrfProof {
 }
 
 #[cfg(test)]
-#[cfg(feature = "none")]
+//#[cfg(feature = "none")]
 mod tests {
     use crate::VrfProof;
 
@@ -257,7 +274,5 @@ mod tests {
         assert_eq!(&gen_hash, &BETHA);
 
         assert!(proof.verify(&pk, &ALPHA).is_ok());
-
-        todo!()
     }
 }

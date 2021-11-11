@@ -19,8 +19,8 @@ pub trait VrfPublicKey: Sized {
 }
 
 pub trait VrfProof: Sized {
-    type PublicKey: VrfPublicKey;
     type SecretKey: VrfSecretKey;
+    type PublicKey: VrfPublicKey;
 
     type Hash;
     type BytesType;
