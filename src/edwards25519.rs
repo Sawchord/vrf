@@ -31,7 +31,16 @@ impl VrfSecretKey for SecretKey {
 
 impl SecretKey {
     fn expand(&self) -> (Scalar, [u8; 32]) {
-        todo!()
+        let hash: [u8; 64] = Sha512::digest(&self.0).as_slice().try_into().unwrap();
+
+        let mut lower: [u8; 32] = hash[0..32].try_into().unwrap();
+        let upper: [u8; 32] = hash[32..64].try_into().unwrap();
+
+        lower[0] &= 248;
+        lower[31] &= 63;
+        lower[31] |= 64;
+
+        (Scalar::from_bits(lower), upper)
     }
 }
 
@@ -271,8 +280,7 @@ mod tests {
         assert_eq!(&pk.to_bytes(), &PK);
 
         let (proof, gen_hash) = super::VrfProof::generate(&pk, &sk, &ALPHA);
-        assert_eq!(&gen_hash, &BETHA);
-
         assert!(proof.verify(&pk, &ALPHA).is_ok());
+        assert_eq!(&gen_hash, &BETHA);
     }
 }
