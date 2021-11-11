@@ -190,3 +190,37 @@ impl VrfProof {
         <Edwards25519 as Curve>::Scalar::from_bytes_mod_order_wide(&k_string)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::VrfProof;
+
+    use super::*;
+    use hex_literal::hex;
+
+    #[test]
+    fn test_case1() {
+        const SK: [u8; 32] =
+            hex!("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+        const PK: [u8; 32] =
+            hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
+        const ALPHA: [u8; 0] = [];
+        const BETHA: [u8; 64] = hex!(
+            "90cf1df3b703cce59e2a35b925d411164068269d7b2d29f3301c03dd757876
+            ff66b71dda49d2de59d03450451af026798e8f81cd2e333de5cdf4f3e140fdd8ae"
+        );
+
+        let sk = SecretKey::from_bytes(&SK).unwrap();
+
+        // Fails
+        let key_pair = KeyPair::from(sk);
+        assert_eq!(&key_pair.get_public_key().to_bytes(), &PK);
+
+        let (proof, gen_hash) = crate::edwards25519::VrfProof::generate(&key_pair, &ALPHA);
+        assert_eq!(&gen_hash, &BETHA);
+
+        assert!(proof.verify(key_pair.get_public_key(), &ALPHA).is_ok());
+
+        todo!()
+    }
+}

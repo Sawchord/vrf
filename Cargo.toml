@@ -7,3 +7,6 @@ publish = false
 [dependencies]
 lucius-curves = { path = "../curves" }
 sha2 = { version = "0.9.8" }
+
+[dev-dependencies]
+hex-literal = "0.3.3"
