@@ -222,7 +222,7 @@ impl VrfProof {
             // C.  H = arbitrary_string_to_point(hash_string)
             match CompressedEdwardsY::from_slice(&hash_string[0..32]).decompress() {
                 // D.  If H is not "INVALID" and cofactor > 1, set H = cofactor * H
-                Some(point) => break point,
+                Some(point) => break Scalar::from(8u8) * point,
                 // E.  ctr = ctr + 1
                 None => ctr += 1,
             }
