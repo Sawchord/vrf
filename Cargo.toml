@@ -5,8 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-lucius-curves = { path = "../curves" }
 sha2 = { version = "0.9.8" }
+curve25519-dalek = { version = "3.2.0", features = ["serde"] }
 
 [dev-dependencies]
 hex-literal = "0.3.3"

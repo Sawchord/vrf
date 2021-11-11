@@ -1,43 +1,68 @@
 // TODO: Remove
 #![allow(dead_code, unused_variables)]
 
-use lucius_curves::{
-    edwards25519::{Edwards25519, KeyPair, PublicKey, SecretKey},
-    Curve, Point, Scalar,
+use crate::{VrfPublicKey, VrfSecretKey, VrfSerializationError, VrfVerificationError};
+use curve25519_dalek::{
+    constants::ED25519_BASEPOINT_POINT,
+    edwards::{CompressedEdwardsY, EdwardsPoint},
+    scalar::Scalar,
 };
 use sha2::{Digest, Sha512};
 
-use crate::{VrfSerializationError, VrfVerificationError};
+pub struct SecretKey([u8; 32]);
+
+impl VrfSecretKey for SecretKey {
+    const LENGTH: usize = 32;
+}
+
+impl SecretKey {
+    fn expand(&self) -> (Scalar, [u8; 32]) {
+        todo!()
+    }
+}
+
+pub struct PublicKey(EdwardsPoint);
+
+impl VrfPublicKey for PublicKey {
+    const LENGTH: usize = 32;
+}
 
 pub struct VrfProof {
-    gamma: <Edwards25519 as Curve>::Point,
-    c: <Edwards25519 as Curve>::Scalar,
-    s: <Edwards25519 as Curve>::Scalar,
+    gamma: EdwardsPoint,
+    c: Scalar,
+    s: Scalar,
 }
 
 impl crate::VrfProof for VrfProof {
-    type Curve = Edwards25519;
+    type PublicKey = PublicKey;
+    type SecretKey = SecretKey;
     type Hash = [u8; 64];
     type BytesType = ();
 
-    fn generate(key_pair: &KeyPair, alpha_string: impl AsRef<[u8]>) -> (Self, Self::Hash) {
+    fn generate(
+        public_key: &Self::PublicKey,
+        secret_key: &Self::SecretKey,
+        alpha_string: impl AsRef<[u8]>,
+    ) -> (Self, Self::Hash) {
+        let (exp_secret_key, _) = secret_key.expand();
+
         // 2. H = ECVRF_hash_to_curve(Y, alpha_string)
-        let h = Self::hash_to_curve(key_pair.get_public_key(), alpha_string);
+        let h = Self::hash_to_curve(public_key, alpha_string);
 
         // 3. h_string = point_to_string(H)
-        let h_string = h.to_bytes();
+        let h_string = h.compress().to_bytes();
 
         // 4. Gamma = x*H
-        let gamma = key_pair.get_secret_key().as_scalar() * h;
+        let gamma = exp_secret_key * h;
 
         // 5. k = ECVRF_nonce_generation(SK, h_string)
-        let k = Self::nonce_generation(key_pair.get_secret_key(), h_string);
+        let k = Self::nonce_generation(secret_key, h_string);
 
         // 6. c = ECVRF_hash_points(H, Gamma, k*B, k*H) (see Section 5.4.3)
-        let c = Self::hash_points(&[h, gamma, k * Edwards25519::BASEPOINT, k * h]);
+        let c = Self::hash_points(&[h, gamma, k * ED25519_BASEPOINT_POINT, k * h]);
 
         // 7. s = (k + c*x) mod q
-        let s = k + c * key_pair.get_secret_key().as_scalar();
+        let s = k + c * exp_secret_key;
 
         // Return proof and hash
         let proof = Self { gamma, s, c };
@@ -47,14 +72,14 @@ impl crate::VrfProof for VrfProof {
 
     fn verify(
         &self,
-        public_key: &PublicKey,
+        public_key: &Self::PublicKey,
         alpha_string: impl AsRef<[u8]>,
     ) -> Result<Self::Hash, VrfVerificationError> {
         // 4. H = ECVRF_hash_to_curve(Y, alpha_string)
         let h = Self::hash_to_curve(public_key, alpha_string);
 
         // 5. U = s*B - c*Y
-        let u = self.s * <Edwards25519 as Curve>::BASEPOINT - self.c * public_key.as_point();
+        let u = self.s * ED25519_BASEPOINT_POINT - self.c * public_key.0;
 
         // 6. V = s*H - c*Gamma
         let v = self.s * h - self.c * self.gamma;
@@ -86,7 +111,7 @@ impl VrfProof {
         let beta_string: [u8; 64] = Sha512::new()
             .chain(&[0x03]) // Suite string for EDWARDS25519-SHA512-TAI
             .chain(&[0x03])
-            .chain((<Edwards25519 as Curve>::Scalar::from(8u8) * self.gamma).to_bytes())
+            .chain((Scalar::from(8u8) * self.gamma).compress().to_bytes())
             .chain(&[0x00])
             .finalize()
             .as_slice()
@@ -97,9 +122,7 @@ impl VrfProof {
         beta_string
     }
 
-    fn hash_points(
-        points: impl AsRef<[<Edwards25519 as Curve>::Point]>,
-    ) -> <Edwards25519 as Curve>::Scalar {
+    fn hash_points(points: impl AsRef<[EdwardsPoint]>) -> Scalar {
         // 2. Initialize str = suite_string || two_string
         let str = Sha512::new().chain(&[0x03]).chain([0x02]);
 
@@ -107,7 +130,7 @@ impl VrfProof {
         let str = points
             .as_ref()
             .iter()
-            .fold(str, |acc, point| acc.chain(point.to_bytes()));
+            .fold(str, |acc, point| acc.chain(point.compress().to_bytes()));
 
         // 4. zero_string = 0x00 = int_to_string(0, 1), a single octet with value 0
         // 5. str = str || zero_string
@@ -115,23 +138,20 @@ impl VrfProof {
         let c_string: [u8; 64] = str.chain(&[0x00]).finalize().as_slice().try_into().unwrap();
 
         // 7. truncated_c_string = c_string[0]...c_string[n-1]
-        let truncated_c_string = &c_string[0..32];
+        let truncated_c_string: [u8; 32] = c_string[0..32].try_into().unwrap();
 
         // 8. c = string_to_int(truncated_c_string)
-        let c = <Edwards25519 as Curve>::Scalar::from_bytes(truncated_c_string).unwrap();
+        let c = Scalar::from_bytes_mod_order(truncated_c_string);
 
         // 9. Output c
         c
     }
 
-    fn hash_to_curve(
-        y: &PublicKey,
-        alpha_string: impl AsRef<[u8]>,
-    ) -> <Edwards25519 as Curve>::Point {
+    fn hash_to_curve(y: &PublicKey, alpha_string: impl AsRef<[u8]>) -> EdwardsPoint {
         // 1. ctr = 0
         let mut ctr: u8 = 0;
         // 2. PK_string = point_to_string(Y)
-        let pk_string = y.to_bytes();
+        let pk_string = y.0.compress().to_bytes();
 
         // 6. While H is "INVALID" or H is the identity element of the elliptic curve group:
         let h = loop {
@@ -152,7 +172,7 @@ impl VrfProof {
                 .unwrap();
 
             // C.  H = arbitrary_string_to_point(hash_string)
-            match <Edwards25519 as Curve>::Point::from_bytes(&hash_string[0..32]) {
+            match CompressedEdwardsY::from_slice(&hash_string[0..32]).decompress() {
                 // D.  If H is not "INVALID" and cofactor > 1, set H = cofactor * H
                 Some(point) => break point,
                 // E.  ctr = ctr + 1
@@ -164,15 +184,10 @@ impl VrfProof {
         h
     }
 
-    fn nonce_generation(
-        secret_key: &SecretKey,
-        h_string: impl AsRef<[u8]>,
-    ) -> <Edwards25519 as Curve>::Scalar {
+    fn nonce_generation(secret_key: &SecretKey, h_string: impl AsRef<[u8]>) -> Scalar {
         // 1. hashed_sk_string = Hash(SK)
-        let hashed_sk_string: [u8; 64] = Sha512::digest(&secret_key.to_bytes())
-            .as_slice()
-            .try_into()
-            .unwrap();
+        let hashed_sk_string: [u8; 64] =
+            Sha512::digest(&secret_key.0).as_slice().try_into().unwrap();
 
         // 2. truncated_hashed_sk_string = hashed_sk_string[32]...hashed_sk_string[63]
         let truncated_hashed_sk_string = &hashed_sk_string[32..64];
@@ -187,11 +202,11 @@ impl VrfProof {
             .unwrap();
 
         // 4. k = string_to_int(k_string) mod q
-        <Edwards25519 as Curve>::Scalar::from_bytes_mod_order_wide(&k_string)
+        Scalar::from_bytes_mod_order_wide(&k_string)
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "none")]
 mod tests {
     use crate::VrfProof;
 
