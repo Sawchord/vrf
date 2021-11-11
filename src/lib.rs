@@ -4,12 +4,18 @@ pub struct VrfVerificationError;
 
 pub struct VrfSerializationError;
 
-pub trait VrfSecretKey {
+pub trait VrfSecretKey: Sized {
     const LENGTH: usize;
+
+    fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self>;
+    fn to_bytes(&self) -> Vec<u8>;
 }
 
-pub trait VrfPublicKey {
+pub trait VrfPublicKey: Sized {
     const LENGTH: usize;
+
+    fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self>;
+    fn to_bytes(&self) -> Vec<u8>;
 }
 
 pub trait VrfProof: Sized {

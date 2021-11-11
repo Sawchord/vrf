@@ -13,6 +13,20 @@ pub struct SecretKey([u8; 32]);
 
 impl VrfSecretKey for SecretKey {
     const LENGTH: usize = 32;
+
+    fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self> {
+        if data.as_ref().len() != Self::LENGTH {
+            return None;
+        }
+        let mut bits: [u8; 32] = [0u8; 32];
+        bits.copy_from_slice(&data.as_ref()[0..32]);
+
+        Some(Self(bits))
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 impl SecretKey {
@@ -25,6 +39,14 @@ pub struct PublicKey(EdwardsPoint);
 
 impl VrfPublicKey for PublicKey {
     const LENGTH: usize = 32;
+
+    fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self> {
+        todo!()
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        todo!()
+    }
 }
 
 pub struct VrfProof {
@@ -206,6 +228,7 @@ impl VrfProof {
     }
 }
 
+#[cfg(test)]
 #[cfg(feature = "none")]
 mod tests {
     use crate::VrfProof;
@@ -226,15 +249,14 @@ mod tests {
         );
 
         let sk = SecretKey::from_bytes(&SK).unwrap();
+        let pk = PublicKey::from(&sk);
 
-        // Fails
-        let key_pair = KeyPair::from(sk);
-        assert_eq!(&key_pair.get_public_key().to_bytes(), &PK);
+        assert_eq!(&pk.to_bytes(), &PK);
 
-        let (proof, gen_hash) = crate::edwards25519::VrfProof::generate(&key_pair, &ALPHA);
+        let (proof, gen_hash) = super::VrfProof::generate(&pk, &sk, &ALPHA);
         assert_eq!(&gen_hash, &BETHA);
 
-        assert!(proof.verify(key_pair.get_public_key(), &ALPHA).is_ok());
+        assert!(proof.verify(&pk, &ALPHA).is_ok());
 
         todo!()
     }
