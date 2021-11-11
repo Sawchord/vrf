@@ -45,13 +45,28 @@ impl crate::VrfProof for VrfProof {
         (proof, hash)
     }
 
-    fn verify(&self, public_key: &PublicKey) -> Result<Self::Hash, VrfVerificationError> {
+    fn verify(
+        &self,
+        public_key: &PublicKey,
+        alpha_string: impl AsRef<[u8]>,
+    ) -> Result<Self::Hash, VrfVerificationError> {
         // 4. H = ECVRF_hash_to_curve(Y, alpha_string)
+        let h = Self::hash_to_curve(public_key, alpha_string);
+
         // 5. U = s*B - c*Y
+        let u = self.s * <Edwards25519 as Curve>::BASEPOINT - self.c * public_key.as_point();
+
         // 6. V = s*H - c*Gamma
+        let v = self.s * h - self.c * self.gamma;
+
         // 7. c' = ECVRF_hash_points(H, Gamma, U, V) (see Section 5.4.3)
+        let c_tick = Self::hash_points(&[h, self.gamma, u, v]);
+
         // 8. If c and c' are equal, output ("VALID",ECVRF_proof_to_hash(pi_string)); else output "INVALID"
-        todo!()
+        match self.c == c_tick {
+            false => Err(VrfVerificationError),
+            true => Ok(self.proof_to_hash()),
+        }
     }
 
     fn to_bytes(&self) -> Self::BytesType {

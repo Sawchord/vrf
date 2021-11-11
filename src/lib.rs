@@ -19,6 +19,7 @@ pub trait VrfProof: Sized {
     fn verify(
         &self,
         public_key: &PublicKey<Self::Curve>,
+        alpha_string: impl AsRef<[u8]>,
     ) -> Result<Self::Hash, VrfVerificationError>;
 
     fn to_bytes(&self) -> Self::BytesType;
