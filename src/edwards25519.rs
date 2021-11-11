@@ -3,7 +3,7 @@
 
 use lucius_curves::{
     edwards25519::{Edwards25519, KeyPair, PublicKey, SecretKey},
-    Curve, Point,
+    Curve, Point, Scalar,
 };
 use sha2::{Digest, Sha512};
 
@@ -100,16 +100,28 @@ impl VrfProof {
     fn hash_points(
         points: impl AsRef<[<Edwards25519 as Curve>::Point]>,
     ) -> <Edwards25519 as Curve>::Scalar {
-        // 1. two_string = 0x02 = int_to_string(2, 1), a single octet with value 2
         // 2. Initialize str = suite_string || two_string
+        let str = Sha512::new().chain(&[0x03]).chain([0x02]);
+
         // 3. for PJ in [P1, P2, ... PM]:str = str || point_to_string(PJ)
+        let str = points
+            .as_ref()
+            .iter()
+            .fold(str, |acc, point| acc.chain(point.to_bytes()));
+
         // 4. zero_string = 0x00 = int_to_string(0, 1), a single octet with value 0
         // 5. str = str || zero_string
         // 6. c_string = Hash(str)
+        let c_string: [u8; 64] = str.chain(&[0x00]).finalize().as_slice().try_into().unwrap();
+
         // 7. truncated_c_string = c_string[0]...c_string[n-1]
+        let truncated_c_string = &c_string[0..32];
+
         // 8. c = string_to_int(truncated_c_string)
+        let c = <Edwards25519 as Curve>::Scalar::from_bytes(truncated_c_string).unwrap();
+
         // 9. Output c
-        todo!()
+        c
     }
 
     fn hash_to_curve(
