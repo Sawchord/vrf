@@ -67,23 +67,45 @@ impl VrfProof {
         beta_string
     }
 
-    fn hash_to_curve_try_and_increment(
+
+    fn hash_to_curve(
         y: &PublicKey,
         alpha_string: impl AsRef<[u8]>,
     ) -> <Edwards25519 as Curve>::Point {
         // 1. ctr = 0
+        let mut ctr: u8 = 0;
         // 2. PK_string = point_to_string(Y)
-        // 3. one_string = 0x01 = int_to_string(1, 1), a single octet with value 1
-        // 4. zero_string = 0x00 = int_to_string(0, 1), a single octet with value 0
-        // 5. H = "INVALID"
+        let pk_string = y.to_bytes();
+
         // 6. While H is "INVALID" or H is the identity element of the elliptic curve group:
-        //    A. ctr_string = int_to_string(ctr, 1)
-        //    B. hash_string = Hash(suite_string || one_string || PK_string || alpha_string || ctr_string || zero_string)
-        //    C.  H = arbitrary_string_to_point(hash_string)
-        //    D.  If H is not "INVALID" and cofactor > 1, set H = cofactor * H
-        //    E.  ctr = ctr + 1
+        let h = loop {
+            // A. ctr_string = int_to_string(ctr, 1)
+            let ctr_string: &[u8] = &[ctr];
+
+            // B. hash_string = Hash(suite_string || one_string || PK_string || alpha_string || ctr_string || zero_string)
+            let hash_string: [u8; 64] = Sha512::new()
+                .chain(&[0x03]) // Suite string
+                .chain(&[0x01])
+                .chain(&pk_string)
+                .chain(alpha_string.as_ref())
+                .chain(ctr_string)
+                .chain(&[0x00])
+                .finalize()
+                .as_slice()
+                .try_into()
+                .unwrap();
+
+            // C.  H = arbitrary_string_to_point(hash_string)
+            match <Edwards25519 as Curve>::Point::from_bytes(&hash_string[0..32]) {
+                // D.  If H is not "INVALID" and cofactor > 1, set H = cofactor * H
+                Some(point) => break point,
+                // E.  ctr = ctr + 1
+                None => ctr += 1,
+            }
+        };
+
         // 7. Output H
-        todo!()
+        h
     }
 
     fn nonce_generation(
