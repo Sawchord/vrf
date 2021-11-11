@@ -22,12 +22,27 @@ impl crate::VrfProof for VrfProof {
 
     fn generate(key_pair: &KeyPair, alpha_string: impl AsRef<[u8]>) -> (Self, Self::Hash) {
         // 2. H = ECVRF_hash_to_curve(Y, alpha_string)
+        let h = Self::hash_to_curve(key_pair.get_public_key(), alpha_string);
+
         // 3. h_string = point_to_string(H)
+        let h_string = h.to_bytes();
+
         // 4. Gamma = x*H
+        let gamma = key_pair.get_secret_key().as_scalar() * h;
+
         // 5. k = ECVRF_nonce_generation(SK, h_string)
+        let k = Self::nonce_generation(key_pair.get_secret_key(), h_string);
+
         // 6. c = ECVRF_hash_points(H, Gamma, k*B, k*H) (see Section 5.4.3)
+        let c = Self::hash_points(&[h, gamma, k * Edwards25519::BASEPOINT, k * h]);
+
         // 7. s = (k + c*x) mod q
-        todo!()
+        let s = k + c * key_pair.get_secret_key().as_scalar();
+
+        // Return proof and hash
+        let proof = Self { gamma, s, c };
+        let hash = proof.proof_to_hash();
+        (proof, hash)
     }
 
     fn verify(&self, public_key: &PublicKey) -> Result<Self::Hash, VrfVerificationError> {
