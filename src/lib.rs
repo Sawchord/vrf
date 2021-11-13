@@ -25,7 +25,7 @@ pub trait VrfProof: Sized {
     type PublicKey: VrfPublicKey;
 
     type Hash;
-    type BytesType;
+    type BytesType: AsRef<[u8]>;
 
     fn generate(
         public_key: &Self::PublicKey,

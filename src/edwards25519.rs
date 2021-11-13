@@ -1,6 +1,3 @@
-// TODO: Remove
-#![allow(dead_code, unused_variables)]
-
 use crate::{VrfPublicKey, VrfSecretKey, VrfSerializationError, VrfVerificationError};
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT,
@@ -75,6 +72,7 @@ impl From<&SecretKey> for PublicKey {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VrfProof {
     gamma: EdwardsPoint,
     c: Scalar,
@@ -85,7 +83,7 @@ impl crate::VrfProof for VrfProof {
     type PublicKey = PublicKey;
     type SecretKey = SecretKey;
     type Hash = [u8; 64];
-    type BytesType = ();
+    type BytesType = [u8; 80];
 
     fn generate(
         public_key: &Self::PublicKey,
@@ -144,12 +142,27 @@ impl crate::VrfProof for VrfProof {
 
     fn to_bytes(&self) -> Self::BytesType {
         // point_to_string(Gamma) || int_to_string(c, n) || int_to_string(s, qLen)
-        todo!()
+        let mut output = [0; 80];
+        output[0..32].copy_from_slice(&self.gamma.compress().to_bytes());
+        output[32..48].copy_from_slice(&self.c.to_bytes()[0..16]);
+        output[48..80].copy_from_slice(&self.s.to_bytes());
+
+        output
     }
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Result<Self, VrfSerializationError> {
         // Decode_proof
-        todo!()
+        Ok(Self {
+            gamma: CompressedEdwardsY::from_slice(&data.as_ref()[0..32])
+                .decompress()
+                .ok_or(VrfSerializationError)?,
+            c: {
+                let mut c = [0; 32];
+                c[0..16].copy_from_slice(&data.as_ref()[32..48]);
+                Scalar::from_bits(c)
+            },
+            s: Scalar::from_bits(data.as_ref()[48..80].try_into().unwrap()),
+        })
     }
 }
 
@@ -186,7 +199,8 @@ impl VrfProof {
         let c_string: [u8; 64] = str.chain(&[0x00]).finalize().as_slice().try_into().unwrap();
 
         // 7. truncated_c_string = c_string[0]...c_string[n-1]
-        let truncated_c_string: [u8; 32] = c_string[0..32].try_into().unwrap();
+        let mut truncated_c_string: [u8; 32] = c_string[0..32].try_into().unwrap();
+        truncated_c_string[16..32].copy_from_slice(&[0; 16]);
 
         // 8. c = string_to_int(truncated_c_string)
         let c = Scalar::from_bytes_mod_order(truncated_c_string);
@@ -262,7 +276,8 @@ mod tests {
     use assert_matches::assert_matches;
     use hex_literal::hex;
 
-    fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], betha: &[u8; 64]) {
+    #[allow(unused_variables)]
+    fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], betha: &[u8; 64], pi: &[u8; 80]) {
         let sk1 = SecretKey::from_bytes(&sk).unwrap();
         let pk1 = PublicKey::from(&sk1);
 
@@ -272,11 +287,20 @@ mod tests {
         // Generate proof
         let (proof, gen_hash) = super::VrfProof::generate(&pk1, &sk1, &alpha);
 
+        // Serialize
+        let proof_string = proof.to_bytes();
+
         // Check that hash of proof works
         assert_eq!(&gen_hash, betha);
 
         // Check that verification passes and generates same test
         assert_matches!(proof.verify(&pk1, &alpha), Ok(betha));
+
+        // Check the proof string
+        assert_eq!(&proof_string, pi);
+
+        // Check that serialization works
+        assert_eq!(super::VrfProof::from_bytes(pi).unwrap(), proof);
     }
 
     #[test]
@@ -290,7 +314,12 @@ mod tests {
             "90cf1df3b703cce59e2a35b925d411164068269d7b2d29f3301c03dd757876
             ff66b71dda49d2de59d03450451af026798e8f81cd2e333de5cdf4f3e140fdd8ae"
         );
-        run_test_case(&SK, &PK, &ALPHA, &BETHA);
+        const PI: [u8; 80] = hex!(
+            "8657106690b5526245a92b003bb079ccd1a92130477671f6fc01ad16f26f723f
+            5e8bd1839b414219e8626d393787a192241fc442e6569e96c462f62b8079b9ed83ff2
+            ee21c90c7c398802fdeebea4001"
+        );
+        run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
     }
 
     #[test]
@@ -304,7 +333,12 @@ mod tests {
             "eb4440665d3891d668e7e0fcaf587f1b4bd7fbfe99d0eb2211ccec90496310
             eb5e33821bc613efb94db5e5b54c70a848a0bef4553a41befc57663b56373a5031"
         );
-        run_test_case(&SK, &PK, &ALPHA, &BETHA);
+        const PI: [u8; 80] = hex!(
+            "f3141cd382dc42909d19ec5110469e4feae18300e94f304590abdced48aed593
+            f7eaf3eb2f1a968cba3f6e23b386aeeaab7b1ea44a256e811892e13eeae7c9f6ea899
+            2557453eac11c4d5476b1f35a08"
+        );
+        run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
     }
 
     #[test]
@@ -318,6 +352,11 @@ mod tests {
             "645427e5d00c62a23fb703732fa5d892940935942101e456ecca7bb217c61c
             452118fec1219202a0edcf038bb6373241578be7217ba85a2687f7a0310b2df19f"
         );
-        run_test_case(&SK, &PK, &ALPHA, &BETHA);
+        const PI: [u8; 80] = hex!(
+            "9bc0f79119cc5604bf02d23b4caede71393cedfbb191434dd016d30177ccbf80
+            e29dc513c01c3a980e0e545bcd848222d08a6c3e3665ff5a4cab13a643bef812e284c
+            6b2ee063a2cb4f456794723ad0a"
+        );
+        run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
     }
 }
