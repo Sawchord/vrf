@@ -1,4 +1,4 @@
-mod edwards25519;
+pub mod edwards25519;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfVerificationError;
