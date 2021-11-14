@@ -203,10 +203,8 @@ impl VrfProof {
         truncated_c_string[16..32].copy_from_slice(&[0; 16]);
 
         // 8. c = string_to_int(truncated_c_string)
-        let c = Scalar::from_bytes_mod_order(truncated_c_string);
-
         // 9. Output c
-        c
+        Scalar::from_bytes_mod_order(truncated_c_string)
     }
 
     fn hash_to_curve(y: &PublicKey, alpha_string: impl AsRef<[u8]>) -> EdwardsPoint {
