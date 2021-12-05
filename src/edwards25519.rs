@@ -57,6 +57,13 @@ impl VrfPublicKey for PublicKey {
     }
 }
 
+impl From<&ed25519_dalek::PublicKey> for PublicKey {
+    fn from(pk: &ed25519_dalek::PublicKey) -> Self {
+        Self::from_bytes(pk.as_bytes()).unwrap()
+    }
+}
+
+// NOTE: This is copied from ed25519-dalek implementation.
 impl From<&SecretKey> for PublicKey {
     fn from(secret_key: &SecretKey) -> Self {
         let hash: [u8; 64] = Sha512::digest(&secret_key.0).as_slice().try_into().unwrap();
@@ -69,6 +76,12 @@ impl From<&SecretKey> for PublicKey {
         bits[31] |= 64;
 
         PublicKey(Scalar::from_bits(bits) * ED25519_BASEPOINT_POINT)
+    }
+}
+
+impl From<&ed25519_dalek::SecretKey> for SecretKey {
+    fn from(sk: &ed25519_dalek::SecretKey) -> Self {
+        Self::from_bytes(sk.to_bytes()).unwrap()
     }
 }
 
@@ -267,7 +280,6 @@ impl VrfProof {
 }
 
 #[cfg(test)]
-//#[cfg(feature = "none")]
 mod tests {
     use super::*;
     use crate::VrfProof;
@@ -276,14 +288,15 @@ mod tests {
 
     #[allow(unused_variables)]
     fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], betha: &[u8; 64], pi: &[u8; 80]) {
-        let sk1 = SecretKey::from_bytes(&sk).unwrap();
-        let pk1 = PublicKey::from(&sk1);
+        let sk1 = ed25519_dalek::SecretKey::from_bytes(sk).unwrap();
+        let pk1 = ed25519_dalek::PublicKey::from(&sk1);
 
         // Check that key generation works
-        assert_eq!(&pk1.to_bytes(), &pk);
+        assert_eq!(&pk1.to_bytes(), pk);
 
         // Generate proof
-        let (proof, gen_hash) = super::VrfProof::generate(&pk1, &sk1, &alpha);
+        let (proof, gen_hash) =
+            super::VrfProof::generate(&PublicKey::from(&pk1), &SecretKey::from(&sk1), &alpha);
 
         // Serialize
         let proof_string = proof.to_bytes();
@@ -292,7 +305,7 @@ mod tests {
         assert_eq!(&gen_hash, betha);
 
         // Check that verification passes and generates same test
-        assert_matches!(proof.verify(&pk1, &alpha), Ok(betha));
+        assert_matches!(proof.verify(&PublicKey::from(&pk1), &alpha), Ok(betha));
 
         // Check the proof string
         assert_eq!(&proof_string, pi);
