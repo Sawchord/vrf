@@ -29,7 +29,7 @@ impl VrfSecretKey for SecretKey {
 
 impl SecretKey {
     fn expand(&self) -> (Scalar, [u8; 32]) {
-        let hash: [u8; 64] = Sha512::digest(&self.0).as_slice().try_into().unwrap();
+        let hash: [u8; 64] = Sha512::digest(self.0).as_slice().try_into().unwrap();
 
         let mut lower: [u8; 32] = hash[0..32].try_into().unwrap();
         let upper: [u8; 32] = hash[32..64].try_into().unwrap();
@@ -69,7 +69,7 @@ impl From<&ed25519_dalek::VerifyingKey> for PublicKey {
 // NOTE: This is copied from ed25519-dalek implementation.
 impl From<&SecretKey> for PublicKey {
     fn from(secret_key: &SecretKey) -> Self {
-        let hash: [u8; 64] = Sha512::digest(&secret_key.0).as_slice().try_into().unwrap();
+        let hash: [u8; 64] = Sha512::digest(secret_key.0).as_slice().try_into().unwrap();
 
         let mut bits: [u8; 32] = [0u8; 32];
         bits.copy_from_slice(&hash[0..32]);
@@ -121,7 +121,7 @@ impl crate::VrfProof for VrfProof {
         let k = Self::nonce_generation(secret_key, h_string);
 
         // 6. c = ECVRF_hash_points(H, Gamma, k*B, k*H) (see Section 5.4.3)
-        let c = Self::hash_points(&[h, gamma, k * ED25519_BASEPOINT_POINT, k * h]);
+        let c = Self::hash_points([h, gamma, k * ED25519_BASEPOINT_POINT, k * h]);
 
         // 7. s = (k + c*x) mod q
         let s = k + c * exp_secret_key;
@@ -147,7 +147,7 @@ impl crate::VrfProof for VrfProof {
         let v = self.s * h - self.c * self.gamma;
 
         // 7. c' = ECVRF_hash_points(H, Gamma, U, V) (see Section 5.4.3)
-        let c_tick = Self::hash_points(&[h, self.gamma, u, v]);
+        let c_tick = Self::hash_points([h, self.gamma, u, v]);
 
         // 8. If c and c' are equal, output ("VALID",ECVRF_proof_to_hash(pi_string)); else output "INVALID"
         match self.c == c_tick {
@@ -187,10 +187,10 @@ impl VrfProof {
     fn proof_to_hash(&self) -> <Self as crate::VrfProof>::Hash {
         // 6. beta_string = Hash(suite_string || three_string || point_to_string(cofactor * Gamma) || zero_string)
         let beta_string: [u8; 64] = Sha512::new()
-            .chain(&[0x03]) // Suite string for EDWARDS25519-SHA512-TAI
-            .chain(&[0x03])
+            .chain([0x03]) // Suite string for EDWARDS25519-SHA512-TAI
+            .chain([0x03])
             .chain((Scalar::from(8u8) * self.gamma).compress().to_bytes())
-            .chain(&[0x00])
+            .chain([0x00])
             .finalize()
             .as_slice()
             .try_into()
@@ -202,7 +202,7 @@ impl VrfProof {
 
     fn hash_points(points: impl AsRef<[EdwardsPoint]>) -> Scalar {
         // 2. Initialize str = suite_string || two_string
-        let str = Sha512::new().chain(&[0x03]).chain([0x02]);
+        let str = Sha512::new().chain([0x03]).chain([0x02]);
 
         // 3. for PJ in [P1, P2, ... PM]:str = str || point_to_string(PJ)
         let str = points
@@ -213,7 +213,7 @@ impl VrfProof {
         // 4. zero_string = 0x00 = int_to_string(0, 1), a single octet with value 0
         // 5. str = str || zero_string
         // 6. c_string = Hash(str)
-        let c_string: [u8; 64] = str.chain(&[0x00]).finalize().as_slice().try_into().unwrap();
+        let c_string: [u8; 64] = str.chain([0x00]).finalize().as_slice().try_into().unwrap();
 
         // 7. truncated_c_string = c_string[0]...c_string[n-1]
         let mut truncated_c_string: [u8; 32] = c_string[0..32].try_into().unwrap();
@@ -237,12 +237,12 @@ impl VrfProof {
 
             // B. hash_string = Hash(suite_string || one_string || PK_string || alpha_string || ctr_string || zero_string)
             let hash_string: [u8; 64] = Sha512::new()
-                .chain(&[0x03]) // Suite string
-                .chain(&[0x01])
-                .chain(&pk_string)
+                .chain([0x03]) // Suite string
+                .chain([0x01])
+                .chain(pk_string)
                 .chain(alpha_string.as_ref())
                 .chain(ctr_string)
-                .chain(&[0x00])
+                .chain([0x00])
                 .finalize()
                 .as_slice()
                 .try_into()
@@ -267,7 +267,7 @@ impl VrfProof {
     fn nonce_generation(secret_key: &SecretKey, h_string: impl AsRef<[u8]>) -> Scalar {
         // 1. hashed_sk_string = Hash(SK)
         let hashed_sk_string: [u8; 64] =
-            Sha512::digest(&secret_key.0).as_slice().try_into().unwrap();
+            Sha512::digest(secret_key.0).as_slice().try_into().unwrap();
 
         // 2. truncated_hashed_sk_string = hashed_sk_string[32]...hashed_sk_string[63]
         let truncated_hashed_sk_string = &hashed_sk_string[32..64];
@@ -305,7 +305,7 @@ mod tests {
         let (proof, gen_hash) = super::VrfProof::generate(
             &PublicKey::from(&pk1),
             &SecretKey::from(sk1.as_bytes()),
-            &alpha,
+            alpha,
         );
 
         // Serialize
@@ -315,7 +315,7 @@ mod tests {
         assert_eq!(&gen_hash, betha);
 
         // Check that verification passes and generates same test
-        assert_matches!(proof.verify(&PublicKey::from(&pk1), &alpha), Ok(betha));
+        assert_matches!(proof.verify(&PublicKey::from(&pk1), alpha), Ok(betha));
 
         // Check the proof string
         assert_eq!(&proof_string, pi);
