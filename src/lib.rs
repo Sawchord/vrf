@@ -1,7 +1,6 @@
-// TODO: Make the entire crate no_std, no_alloc
+#![no_std]
 
 pub mod edwards25519;
-mod serde;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VrfVerificationError;
@@ -11,16 +10,18 @@ pub struct VrfSerializationError;
 
 pub trait VrfSecretKey: Sized {
     const LENGTH: usize;
+    type BytesType: AsRef<[u8]>;
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self>;
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Self::BytesType;
 }
 
 pub trait VrfPublicKey: Sized {
     const LENGTH: usize;
+    type BytesType: AsRef<[u8]>;
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self>;
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self) -> Self::BytesType;
 }
 
 pub trait VrfProof: Sized {

@@ -5,14 +5,16 @@ use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     scalar::Scalar,
 };
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
 use zeroize::Zeroize;
 
-#[derive(Zeroize)]
+#[derive(Zeroize, Serialize, Deserialize)]
 pub struct SecretKey([u8; 32]);
 
 impl VrfSecretKey for SecretKey {
     const LENGTH: usize = 32;
+    type BytesType = [u8; 32];
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self> {
         if data.as_ref().len() != Self::LENGTH {
@@ -24,8 +26,8 @@ impl VrfSecretKey for SecretKey {
         Some(Self(bits))
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.to_vec()
+    fn to_bytes(&self) -> Self::BytesType {
+        self.0
     }
 }
 
@@ -44,10 +46,12 @@ impl SecretKey {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PublicKey(EdwardsPoint);
 
 impl VrfPublicKey for PublicKey {
     const LENGTH: usize = 32;
+    type BytesType = [u8; 32];
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self> {
         Some(Self(
@@ -57,8 +61,8 @@ impl VrfPublicKey for PublicKey {
         ))
     }
 
-    fn to_bytes(&self) -> Vec<u8> {
-        self.0.compress().to_bytes().to_vec()
+    fn to_bytes(&self) -> Self::BytesType {
+        self.0.compress().to_bytes()
     }
 }
 
@@ -90,7 +94,7 @@ impl From<&ed25519_dalek::SecretKey> for SecretKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VrfProof {
     gamma: EdwardsPoint,
     c: Scalar,
