@@ -300,28 +300,23 @@ mod tests {
     use hex_literal::hex;
 
     #[allow(unused_variables)]
-    fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], betha: &[u8; 64], pi: &[u8; 80]) {
-        let sk1 = ed25519_dalek::SigningKey::from_bytes(sk);
-        let pk1 = ed25519_dalek::VerifyingKey::from(&sk1);
-
-        // Check that key generation works
-        assert_eq!(&pk1.to_bytes(), pk);
+    fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], beta: &[u8; 64], pi: &[u8; 80]) {
+        let sk = SecretKey::from_bytes(sk).unwrap();
 
         // Generate proof
-        let (proof, gen_hash) = super::VrfProof::generate(
-            &PublicKey::from(&pk1),
-            &SecretKey::from(sk1.as_bytes()),
-            alpha,
-        );
+        let (proof, gen_hash) = super::VrfProof::generate(&PublicKey::from(&sk), &sk, alpha);
 
         // Serialize
         let proof_string = proof.to_bytes();
 
         // Check that hash of proof works
-        assert_eq!(&gen_hash, betha);
+        assert_eq!(&gen_hash, beta);
 
         // Check that verification passes and generates same test
-        assert_matches!(proof.verify(&PublicKey::from(&pk1), alpha), Ok(betha));
+        assert_matches!(
+            proof.verify(&PublicKey::from_bytes(pk).unwrap(), alpha),
+            Ok(beta)
+        );
 
         // Check the proof string
         assert_eq!(&proof_string, pi);
@@ -338,7 +333,7 @@ mod tests {
         const PK: [u8; 32] =
             hex!("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
         const ALPHA: [u8; 0] = [];
-        const BETHA: [u8; 64] = hex!(
+        const BETA: [u8; 64] = hex!(
             "90cf1df3b703cce59e2a35b925d411164068269d7b2d29f3301c03dd757876
             ff66b71dda49d2de59d03450451af026798e8f81cd2e333de5cdf4f3e140fdd8ae"
         );
@@ -347,7 +342,7 @@ mod tests {
             5e8bd1839b414219e8626d393787a192241fc442e6569e96c462f62b8079b9ed83ff2
             ee21c90c7c398802fdeebea4001"
         );
-        run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
+        run_test_case(&SK, &PK, &ALPHA, &BETA, &PI);
     }
 
     /// Example 17
@@ -358,7 +353,7 @@ mod tests {
         const PK: [u8; 32] =
             hex!("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c");
         const ALPHA: [u8; 1] = hex!("72");
-        const BETHA: [u8; 64] = hex!(
+        const BETA: [u8; 64] = hex!(
             "eb4440665d3891d668e7e0fcaf587f1b4bd7fbfe99d0eb2211ccec90496310
             eb5e33821bc613efb94db5e5b54c70a848a0bef4553a41befc57663b56373a5031"
         );
@@ -367,7 +362,7 @@ mod tests {
             f7eaf3eb2f1a968cba3f6e23b386aeeaab7b1ea44a256e811892e13eeae7c9f6ea899
             2557453eac11c4d5476b1f35a08"
         );
-        run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
+        run_test_case(&SK, &PK, &ALPHA, &BETA, &PI);
     }
 
     /// Example 18
@@ -378,7 +373,7 @@ mod tests {
         const PK: [u8; 32] =
             hex!("fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025");
         const ALPHA: [u8; 2] = hex!("af82");
-        const BETHA: [u8; 64] = hex!(
+        const BETA: [u8; 64] = hex!(
             "645427e5d00c62a23fb703732fa5d892940935942101e456ecca7bb217c61c
             452118fec1219202a0edcf038bb6373241578be7217ba85a2687f7a0310b2df19f"
         );
@@ -387,6 +382,6 @@ mod tests {
             e29dc513c01c3a980e0e545bcd848222d08a6c3e3665ff5a4cab13a643bef812e284c
             6b2ee063a2cb4f456794723ad0a"
         );
-        run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
+        run_test_case(&SK, &PK, &ALPHA, &BETA, &PI);
     }
 }
