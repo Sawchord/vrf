@@ -6,7 +6,9 @@ use curve25519_dalek::{
     scalar::Scalar,
 };
 use sha2::{Digest, Sha512};
+use zeroize::Zeroize;
 
+#[derive(Zeroize)]
 pub struct SecretKey([u8; 32]);
 
 impl VrfSecretKey for SecretKey {
@@ -38,7 +40,7 @@ impl SecretKey {
         lower[31] &= 63;
         lower[31] |= 64;
 
-        (Scalar::from_bits(lower), upper)
+        (Scalar::from_bytes_mod_order(lower), upper)
     }
 }
 
@@ -78,7 +80,7 @@ impl From<&SecretKey> for PublicKey {
         bits[31] &= 127;
         bits[31] |= 64;
 
-        PublicKey(Scalar::from_bits(bits) * ED25519_BASEPOINT_POINT)
+        PublicKey(Scalar::from_bytes_mod_order(bits) * ED25519_BASEPOINT_POINT)
     }
 }
 
@@ -170,15 +172,15 @@ impl crate::VrfProof for VrfProof {
         // Decode_proof
         Ok(Self {
             gamma: CompressedEdwardsY::from_slice(&data.as_ref()[0..32])
-                .map_err(|_| VrfSerializationError)?
+                .unwrap()
                 .decompress()
                 .ok_or(VrfSerializationError)?,
             c: {
                 let mut c = [0; 32];
                 c[0..16].copy_from_slice(&data.as_ref()[32..48]);
-                Scalar::from_bits(c)
+                Scalar::from_bytes_mod_order(c)
             },
-            s: Scalar::from_bits(data.as_ref()[48..80].try_into().unwrap()),
+            s: Scalar::from_bytes_mod_order(data.as_ref()[48..80].try_into().unwrap()),
         })
     }
 }
@@ -324,6 +326,7 @@ mod tests {
         assert_eq!(super::VrfProof::from_bytes(pi).unwrap(), proof);
     }
 
+    /// Example 16
     #[test]
     fn test_case1() {
         const SK: [u8; 32] =
@@ -343,6 +346,7 @@ mod tests {
         run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
     }
 
+    /// Example 17
     #[test]
     fn test_case2() {
         const SK: [u8; 32] =
@@ -362,6 +366,7 @@ mod tests {
         run_test_case(&SK, &PK, &ALPHA, &BETHA, &PI);
     }
 
+    /// Example 18
     #[test]
     fn test_case3() {
         const SK: [u8; 32] =

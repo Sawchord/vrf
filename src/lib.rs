@@ -1,3 +1,5 @@
+// TODO: Make the entire crate no_std, no_alloc
+
 pub mod edwards25519;
 mod serde;
 

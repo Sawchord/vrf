@@ -1,4 +1,5 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+// TODO: Need to implement this functionality without ByteBuf
 use serde_bytes::ByteBuf;
 
 use crate::{
@@ -62,3 +63,5 @@ impl<'de> Deserialize<'de> for VrfProof {
         VrfProof::from_bytes(bytes.as_ref()).map_err(|err| Error::custom(format!("{:?}", err)))
     }
 }
+
+// TODO: Test re-serialization
