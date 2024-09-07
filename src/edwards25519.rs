@@ -1,6 +1,7 @@
 use crate::{VrfPublicKey, VrfSecretKey, VrfSerializationError, VrfVerificationError};
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_POINT,
+    digest::Update,
     edwards::{CompressedEdwardsY, EdwardsPoint},
     scalar::Scalar,
 };
@@ -48,7 +49,9 @@ impl VrfPublicKey for PublicKey {
 
     fn from_bytes(data: impl AsRef<[u8]>) -> Option<Self> {
         Some(Self(
-            CompressedEdwardsY::from_slice(data.as_ref()).decompress()?,
+            CompressedEdwardsY::from_slice(data.as_ref())
+                .unwrap()
+                .decompress()?,
         ))
     }
 
@@ -57,8 +60,8 @@ impl VrfPublicKey for PublicKey {
     }
 }
 
-impl From<&ed25519_dalek::PublicKey> for PublicKey {
-    fn from(pk: &ed25519_dalek::PublicKey) -> Self {
+impl From<&ed25519_dalek::VerifyingKey> for PublicKey {
+    fn from(pk: &ed25519_dalek::VerifyingKey) -> Self {
         Self::from_bytes(pk.as_bytes()).unwrap()
     }
 }
@@ -81,7 +84,7 @@ impl From<&SecretKey> for PublicKey {
 
 impl From<&ed25519_dalek::SecretKey> for SecretKey {
     fn from(sk: &ed25519_dalek::SecretKey) -> Self {
-        Self::from_bytes(sk.to_bytes()).unwrap()
+        Self::from_bytes(sk).unwrap()
     }
 }
 
@@ -167,6 +170,7 @@ impl crate::VrfProof for VrfProof {
         // Decode_proof
         Ok(Self {
             gamma: CompressedEdwardsY::from_slice(&data.as_ref()[0..32])
+                .map_err(|_| VrfSerializationError)?
                 .decompress()
                 .ok_or(VrfSerializationError)?,
             c: {
@@ -245,7 +249,10 @@ impl VrfProof {
                 .unwrap();
 
             // C.  H = arbitrary_string_to_point(hash_string)
-            match CompressedEdwardsY::from_slice(&hash_string[0..32]).decompress() {
+            match CompressedEdwardsY::from_slice(&hash_string[0..32])
+                .unwrap()
+                .decompress()
+            {
                 // D.  If H is not "INVALID" and cofactor > 1, set H = cofactor * H
                 Some(point) => break Scalar::from(8u8) * point,
                 // E.  ctr = ctr + 1
@@ -288,15 +295,18 @@ mod tests {
 
     #[allow(unused_variables)]
     fn run_test_case(sk: &[u8; 32], pk: &[u8; 32], alpha: &[u8], betha: &[u8; 64], pi: &[u8; 80]) {
-        let sk1 = ed25519_dalek::SecretKey::from_bytes(sk).unwrap();
-        let pk1 = ed25519_dalek::PublicKey::from(&sk1);
+        let sk1 = ed25519_dalek::SigningKey::from_bytes(sk);
+        let pk1 = ed25519_dalek::VerifyingKey::from(&sk1);
 
         // Check that key generation works
         assert_eq!(&pk1.to_bytes(), pk);
 
         // Generate proof
-        let (proof, gen_hash) =
-            super::VrfProof::generate(&PublicKey::from(&pk1), &SecretKey::from(&sk1), &alpha);
+        let (proof, gen_hash) = super::VrfProof::generate(
+            &PublicKey::from(&pk1),
+            &SecretKey::from(sk1.as_bytes()),
+            &alpha,
+        );
 
         // Serialize
         let proof_string = proof.to_bytes();
